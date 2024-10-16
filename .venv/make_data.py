@@ -1,24 +1,15 @@
 import cv2
+import os
 import numpy as np
 import mediapipe as mp
 import pandas as pd
 
-
-# read
-cap = cv2.VideoCapture(0)
-
-#create library mediapipe
+# Khởi tạo MediaPipe Pose
 mpPose = mp.solutions.pose
 pose = mpPose.Pose()
 mpDraw = mp.solutions.drawing_utils
 
-lm_list = []
-label = "clapswing"
-no_of_frames = 600
-
-
 def make_landmark_timestep(results):
-    print(results.pose_landmarks.landmark)
     c_lm = []
     for id, lm in enumerate(results.pose_landmarks.landmark):
         c_lm.append(lm.x)
@@ -27,36 +18,36 @@ def make_landmark_timestep(results):
         c_lm.append(lm.visibility)
     return c_lm
 
-def draw_landmark_on_image(mpDraw, results, img):
-    # ve cac duong noi
-    mpDraw.draw_landmarks(img, results.pose_landmarks, mpPose.POSE_CONNECTIONS)
-
-    # ve cac diem nut
-    for id, lm in enumerate(results.pose_landmarks.landmark):
-        h, w, c = img.shape
-        print(id,lm)
-        cx, cy = int(lm.x*w), int(lm.y*h)
-        cv2.circle(img, (cx,cy), 5, (0,0,255), -1)
-    return img
-
-while len(lm_list) <= no_of_frames:
-    ret, frame = cap.read()
-    if ret:
-        #nhận diện pose
-        frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(frameRGB)
-        if results.pose_landmarks:
-            # ghi nhan thong so khung xuong
-            lm = make_landmark_timestep(results)
-            lm_list.append(lm)
-
-            # ve khung xuong len anh
-            frame = draw_landmark_on_image(mpDraw, results, frame)
-        cv2.imshow('image', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+def process_video(video_path, label):
+    lm_list = []
+    cap = cv2.VideoCapture(video_path)
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if ret:
+            frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = pose.process(frameRGB)
+            if results.pose_landmarks:
+                lm = make_landmark_timestep(results)
+                lm_list.append(lm)
+        else:
             break
-# write csv
-df = pd.DataFrame(lm_list)
-df.to_csv(label + ".txt")
-cap.release()
-cv2.destroyAllWindows()
+    cap.release()
+    return lm_list
+
+def save_landmarks_to_csv(lm_list, label):
+    df = pd.DataFrame(lm_list)
+    df.to_csv(f"{label}.txt", index=False)
+
+# Đường dẫn đến thư mục chứa video
+root_folder = "D:\HAR\Human_acti\ToLearnBlockchain\.venv\HumanActivity"  # Thay bằng đường dẫn thực tế của bạn
+labels = ["Clapping", "Meet and Split", "Sitting", "Standing Still",
+          "Walking", "Walking While Reading Book", "Walking While Using Phone"]
+
+# Lặp qua từng thư mục và video để xử lý
+for label in labels:
+    folder_path = os.path.join(root_folder, label)
+    for video_file in os.listdir(folder_path):
+        video_path = os.path.join(folder_path, video_file)
+        print(f"Processing {video_file} for action {label}...")
+        lm_list = process_video(video_path, label)
+        save_landmarks_to_csv(lm_list, label)
